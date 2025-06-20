@@ -1,40 +1,11 @@
-library(chillR)
-Bonn_station_list_dwd<-handle_dwd(action="list_stations",
-                                location=c(7.1, 50.8),
-                                time_interval=c(20201231,20250330))
-
-install.packages("GSODR")
-library(GSODR)
-germany <- get_GSOD(years = 2024, country = "Germany")
-Bonn <- get_GSOD(years = 2024, station = "105130-99999")
-write.csv(Bonn, file = "Bonn_GSODR.csv", row.names = FALSE)
-
-install.packages("terra")
-library(terra)
-grib <- "UK_Met_forecast.grib"
-past_forecast <- rast(grib)
-df <- as.data.frame(past_forecast, xy = TRUE) 
-write.csv(df, "Bonn_UKMet_forecast.csv", row.names = FALSE)
-
-
-#--------------#
-
-
-### Use Lars' codes (Compare historical and forecasts)
-
 #rnomads is stupid, gribr is stupid, they all need a ton of extra software and I don't want that
 library(tidyverse)
-library(readr)
+
 #downloaded for march
 #test <- terra::rast('69d58496fb16850236ba61219dbe7c85.grib')
 test <- terra::rast('Bonn_forecast_Jan_23-24-25.grib')
-df <- as.data.frame(test, xy = TRUE)
-# head(df)
-write_csv(df, "Bonn_forecast_Jan_23-24-25.csv")
 
-# data file too big- only do for 2024
-
-
+# terra::time(test)
 # #terra::sources(test)
 # terra::describe(test)
 
@@ -96,9 +67,9 @@ data <- chillR::handle_dwd(action = "download_weather",
 
 data_clean <- chillR::handle_dwd(data)
 data_clean$
-  
-  #downloaded for march
-  test <- terra::rast('Bonn_forecast_Jan_23-24-25.grib')
+
+#downloaded for march
+test <- terra::rast('Bonn_forecast_Jan_23-24-25.grib')
 #test <- terra::rast('UK_Met_forecast.grib')
 
 #           long  lat
@@ -183,6 +154,5 @@ ggsave('Bonn_Forecast_and_Predicted_2023_2024.jpeg',
        width = 20,
        units = 'cm',
        device = 'jpeg')
-
+  
 p1
-

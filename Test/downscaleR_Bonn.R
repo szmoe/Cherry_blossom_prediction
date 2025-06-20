@@ -20,8 +20,8 @@ require(magrittr)
 x.eur <- readRDS("multi_grid_ERA_Interim.rds")
 
 # Set coordinates for Bonn
-lonLim <- c(7,8.6)
-latLim <- c(50,52)
+lonLim <- c(3,8.6)
+latLim <- c(50,60)
 
 # Load github file
 value <- file.path(find.package("VALUE"), "example_datasets", 
@@ -41,7 +41,7 @@ y <- loadStationData(dataset = value,
 dataInventory(dataset = value) # Bonn is within their coverage, i think?
 # Try adjusting lonlim and latlim to higher values and it worked
 
-y_bin <- binaryGrid(y, condition = "GE", threshold = 1)
+y_bin <- binaryGrid(y, condition = "LE", threshold = 50)
 
 # The following code prepares a map displaying the predictor set reference 
 # grid and the predictand locations:
