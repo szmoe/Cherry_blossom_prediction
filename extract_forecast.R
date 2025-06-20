@@ -1,16 +1,24 @@
 #rnomads is stupid, gribr is stupid, they all need a ton of extra software and I don't want that
 library(tidyverse)
 
-#downloaded for march
+#downloaded for 2021 to 2024
 #test <- terra::rast('69d58496fb16850236ba61219dbe7c85.grib')
-test <- terra::rast('Bonn_forecast_Jan_23-24-25.grib')
+test0 <- terra::rast('./data/Bonn_forecast_Jan_July_21_22.grib')
+test1 <- terra::rast('./data/Bonn_forecast_Jan_23-24-25.grib')
+test2 <- terra::rast('./data/Bonn_forecast_July_23_24.grib')
+test <- c(test0, test1, test2)
 
 # terra::time(test)
 # #terra::sources(test)
 # terra::describe(test)
 
+
+# Transform dataset into chillR format
+long <- 7.0871843
+lat <- 50.7341602
+
 #           long  lat
-pt <- cbind(7.1, 50.7)
+pt <- cbind(long, lat)
 
 test_extracted <- terra::extract(test, pt)
 #temperatures are in K
@@ -26,7 +34,7 @@ test_out <- test_extracted %>%
 
 #there are 50 ensemble members
 nrow(test_out) / 50
-test_out$model <- rep(1:50, each = 2176)
+test_out$model <- rep(1:50, each = 6568)
 
 test_out %>% 
   mutate(model = as.factor(model),
@@ -69,7 +77,7 @@ data_clean <- chillR::handle_dwd(data)
 data_clean$
 
 #downloaded for march
-test <- terra::rast('Bonn_forecast_Jan_23-24-25.grib')
+#test <- terra::rast('Bonn_forecast_Jan_23-24-25.grib')
 #test <- terra::rast('UK_Met_forecast.grib')
 
 #           long  lat
@@ -94,6 +102,9 @@ test_out <- test_extracted %>%
 row_per_model <- nrow(test_out) / 50
 test_out$model <- rep(1:50, each = row_per_model)
 test_out$id <- paste(test_out$model, test_out$season, sep = '--')
+
+# save csv
+write.csv(test_out, './data/Bonn_forecast_2021_2024.csv', row.names = FALSE)
 
 p1 <- test_out %>% 
   mutate(model = as.factor(model),
@@ -134,6 +145,7 @@ forecast_sum <- test_out %>%
          q10_run = chillR::runn_mean(q10_temp, runn_mean = 4 * 7),
          q90_run = chillR::runn_mean(q_90_temp, runn_mean = 4 * 7))
 
+
 forecast_sum %>% 
   ggplot() +
   geom_ribbon(aes(x = time, ymin = q10_run, ymax = q90_run,
@@ -149,7 +161,7 @@ forecast_sum %>%
                            lubridate::ymd_h('2024-05-01 01'))) +
   scale_fill_manual(values = 'grey70') +
   theme_bw()
-ggsave('Bonn_Forecast_and_Predicted_2023_2024.jpeg',
+ggsave('Bonn_Forecast_and_Predicted_2021-2024.jpeg',
        height = 15,
        width = 20,
        units = 'cm',
