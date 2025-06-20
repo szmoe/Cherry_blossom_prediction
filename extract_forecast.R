@@ -14,42 +14,42 @@ test <- c(test0, test1, test2)
 
 
 # Transform dataset into chillR format
-long <- 7.0871843
-lat <- 50.7341602
+# long <- 7.0871843
+# lat <- 50.7341602
 
 #           long  lat
-pt <- cbind(long, lat)
-
-test_extracted <- terra::extract(test, pt)
-#temperatures are in K
-test_extracted <- test_extracted %>% t()
-rownames(test_extracted) <- NULL
-test_out <- test_extracted %>% 
-  as.data.frame() %>% 
-  mutate(temperature = (V1 - 273.15) %>% round(digits = 2),
-         V1 = round(V1, digits = 2),
-         time = terra::time(test),
-         hour = lubridate::hour(time), 
-         date = lubridate::date(time))
-
-#there are 50 ensemble members
-nrow(test_out) / 50
-test_out$model <- rep(1:50, each = 6568)
-
-test_out %>% 
-  mutate(model = as.factor(model),
-         date = as.Date(time)) %>% 
-  ggplot(aes(x = date, y = temperature)) +
-  geom_line(aes(group = model, col = as.factor(model))) +
-  scale_x_date(date_minor_breaks = "week", date_breaks = "2 week")
-
-test_out %>% 
-  mutate(model = as.factor(model),
-         date = as.Date(time)) %>% 
-  filter(model %in% c(1,2)) %>% 
-  ggplot(aes(x = date, y = temperature)) +
-  geom_line(aes(group = model, col = as.factor(model))) +
-  scale_x_date(date_minor_breaks = "week", date_breaks = "2 week")
+# pt <- cbind(long, lat)
+# 
+# test_extracted <- terra::extract(test, pt)
+# #temperatures are in K
+# test_extracted <- test_extracted %>% t()
+# rownames(test_extracted) <- NULL
+# test_out <- test_extracted %>% 
+#   as.data.frame() %>% 
+#   mutate(temperature = (V1 - 273.15) %>% round(digits = 2),
+#          V1 = round(V1, digits = 2),
+#          time = terra::time(test),
+#          hour = lubridate::hour(time), 
+#          date = lubridate::date(time))
+# 
+# #there are 50 ensemble members
+# nrow(test_out) / 50
+# test_out$model <- rep(1:50, each = 6568)
+# 
+# test_out %>% 
+#   mutate(model = as.factor(model),
+#          date = as.Date(time)) %>% 
+#   ggplot(aes(x = date, y = temperature)) +
+#   geom_line(aes(group = model, col = as.factor(model))) +
+#   scale_x_date(date_minor_breaks = "week", date_breaks = "2 week")
+# 
+# test_out %>% 
+#   mutate(model = as.factor(model),
+#          date = as.Date(time)) %>% 
+#   filter(model %in% c(1,2)) %>% 
+#   ggplot(aes(x = date, y = temperature)) +
+#   geom_line(aes(group = model, col = as.factor(model))) +
+#   scale_x_date(date_minor_breaks = "week", date_breaks = "2 week")
 
 
 
@@ -76,9 +76,9 @@ data <- chillR::handle_dwd(action = "download_weather",
 data_clean <- chillR::handle_dwd(data)
 data_clean$
 
-#downloaded for march
-#test <- terra::rast('Bonn_forecast_Jan_23-24-25.grib')
-#test <- terra::rast('UK_Met_forecast.grib')
+# Process forecast data
+long <- 7.0871843
+lat <- 50.7341602
 
 #           long  lat
 pt <- cbind(long, lat)
@@ -167,4 +167,3 @@ ggsave('Bonn_Forecast_and_Predicted_2021-2024.jpeg',
        units = 'cm',
        device = 'jpeg')
   
-p1
