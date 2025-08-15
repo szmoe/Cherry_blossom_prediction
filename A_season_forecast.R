@@ -62,8 +62,8 @@ for (i in seq_along(month)) {
 # Save so that I don't need to download again
 # str(Bonn_forecast)
 # saveRDS(Bonn_forecast, "data/Bonn_forecast.rds")
-# Bonn_forecast_loaded <- readRDS("data/Bonn_forecast.rds")
-# str(Bonn_forecast_loaded)
+Bonn_forecast <- readRDS("data/Bonn_forecast.rds")
+str(Bonn_forecast)
 
 # Download observed
 # No need to loop for this but maybe this can be put inside a function 
@@ -366,10 +366,10 @@ for(j in 1:length(Bonn_forecast)) {
 }
 
 # Save to file
+# str(weather_combined)
+# saveRDS(weather_combined, "data/weather_combined.rds")
+weather_combined <- readRDS("data/weather_combined.rds")
 str(weather_combined)
-saveRDS(weather_combined, "data/weather_combined.rds")
-weather_combined_loaded <- readRDS("data/weather_combined.rds")
-str(weather_combined_loaded)
 
 
 ## Predict bloom dates for cherry blossom 
@@ -424,7 +424,7 @@ for(j in seq_along(bloom_dates)) {
   
   # Create data frame
   predictions <- data.frame(
-    Season = rep(2025, length(bloom_vec)),
+    Season = rep(seasons, length(bloom_vec)),
     Prediction = bloom_vec
   )
   
@@ -473,3 +473,4 @@ bloom_plot[[8]] # Observed data
 ## Best prediction: 2024-03-13
 ## Real bloom dates: Between 2024-03-21 and 2024-04-5, more likely on early April
 ## Did I do something wrongly or do we need a better data source?
+

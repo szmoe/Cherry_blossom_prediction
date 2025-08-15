@@ -136,6 +136,7 @@ data_observed_mean_formatted <- data_observed_hourly_30year$hourtemps %>%
 
 # Loop 
 i <- 1:50
+mean_year <- 2025
 
 weather_combined <-  list()
 
@@ -286,10 +287,4 @@ ggplot(predictions, aes(x = Prediction)) +
     date_labels = "%Y-%m-%d"
   ) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-##------------------------------------------------------------------------##
-
-## Do it for 7 months forecast from October 2024 to April 2025
-
-
 
