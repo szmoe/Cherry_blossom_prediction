@@ -485,10 +485,10 @@ RMSE_df <- bloom_df %>%
   ) %>%
   mutate(season = season)
 
-# Add month names for clarity
+# Add month names and calendar year
 RMSE_df <- RMSE_df %>%
   mutate(
-    Month = case_when(
+    forecast_month = case_when(
       list == 1 ~ "October",
       list == 2 ~ "November",
       list == 3 ~ "December",
@@ -496,8 +496,14 @@ RMSE_df <- RMSE_df %>%
       list == 5 ~ "February",
       list == 6 ~ "March",
       list == 7 ~ "April"
+    ),
+    # Add a new column for the calendar year
+    forecast_year = case_when(
+      list %in% c(1, 2, 3) ~ season - 1,
+      TRUE ~ season
     )
-  )
+  ) %>%
+  select("forecast_year", "forecast_month", "RMSE")
 
 # Display the final table
 print(RMSE_df)
