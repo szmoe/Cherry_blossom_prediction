@@ -7,6 +7,7 @@ library(dplyr)
 library(patchwork)
 library(lubridate)
 library(purrr)
+library(ggplot2)
 
 ## Do it for 7 months forecast from October 2023 to April 2024
 
@@ -449,6 +450,57 @@ bloom_plot[[5]] # Feb 2024 forecast
 bloom_plot[[6]] # March 2024 forecast
 bloom_plot[[7]] # April 2024 forecast
 bloom_plot[[8]] # Observed data
+
+##---------------------------------##
+
+# Convert the nested list to a data frame
+bloom_df <- list()
+
+# Loop through the outer list (each of the 8 lists)
+for(i in seq_along(df)) {
+  temp_df <- data.frame(
+    list = rep(i, length(unlist(df[[i]]))),
+    bloom_JDay = unlist(df[[i]])
+  )
+  bloom_df[[length(bloom_df) + 1]] <- temp_df
+}
+
+# Combine all data frames into one
+bloom_df <- bind_rows(bloom_df)
+
+# Convert list to a factor for proper grouping
+bloom_df$list <- as.factor(bloom_df$list)
+
+# Get the season and observed JDay (assuming season is constant)
+season <- 2024
+observed_JDay <- as.numeric(bloom_df %>% filter(list == 8) %>% pull(bloom_JDay))
+
+# Calculate RMSE for each forecast list
+RMSE_df <- bloom_df %>%
+  filter(list %in% 1:7) %>%
+  group_by(list) %>%
+  summarize(
+    RMSE = chillR::RMSEP(as.numeric(bloom_JDay), rep(observed_JDay, length(bloom_JDay)), na.rm = TRUE),
+    .groups = 'drop'
+  ) %>%
+  mutate(season = season)
+
+# Add month names for clarity
+RMSE_df <- RMSE_df %>%
+  mutate(
+    Month = case_when(
+      list == 1 ~ "October",
+      list == 2 ~ "November",
+      list == 3 ~ "December",
+      list == 4 ~ "January",
+      list == 5 ~ "February",
+      list == 6 ~ "March",
+      list == 7 ~ "April"
+    )
+  )
+
+# Display the final table
+print(RMSE_df)
 
 ## April 2024 forecast and all observed data are the same, coz for April 2024 forecast
 ## I patched the observed data till March 2024, so if we make prediction, the final forecast
