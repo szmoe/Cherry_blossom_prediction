@@ -176,49 +176,49 @@ saveRDS(data_observed_mean, "data/Bonn_longterm_mean_four_seasons.rds")
 data_observed_mean <- readRDS("data/Bonn_longterm_mean_four_seasons.rds")
 
 ## Find hourly forecast 
+Bonn_forecast <- readRDS("data/Bonn_forecast_four_seasons.rds")
 # Loop 
 weather_combined <- list()
-for (j in seq_along(Bonn_forecast)) {
-  df_j <- Bonn_forecast[[j]]   # list of months for year j
+
+for(j in 1:length(Bonn_forecast)) {
   
-  weather_combined[[j]] <- list()
+  df_j <- Bonn_forecast[[j]]  
+  weather_combined[[j]] <- list()  
   
-  for (m in seq_along(df_j)) {
-    df_m <- df_j[[m]]   # data.frame with 50 models
-    weather_combined[[j]][[m]] <- list()
-    
-    for (mod in unique(df_m$model)) {
-      # Filter by model
-      df_model <- df_m %>%
-        filter(model == mod) %>%
-        rename(Temp = temp)
-      
-      # Interpolation to hourly
-      Bonn_forecast_hourly <- interpolate_gaps_hourly(
-        hourtemps = df_model,
-        latitude = 50.62,
-        daily_temps = NULL,
-        interpolate_remaining = TRUE,
-        return_extremes = FALSE,
-        minimum_values_for_solving = 4,
-        daily_patch_max_mean_bias = NA,
-        daily_patch_max_stdev_bias = NA
-      )
-      
-      # Align format
-      data_forecast_model_clean <- Bonn_forecast_hourly$weather %>%
-        filter(model == mod) %>%
-        mutate(DATE = ymd(paste(Year, Month, Day)),
-               YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day),
-               Temp = Temp - 273.15) %>%
-        rename(Tmin = Tmin_source, Tmax = Tmax_source) %>%
-        select(DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
-      
-      # save into nested structure
-      weather_combined[[j]][[m]][[mod]] <- data_forecast_model_clean
-    }
-  }
+  for (k in 1:length(df_j)) {
+    df_m <- df_j[[k]]
+    weather_combined[[j]][[k]] <- list()
+  
+    for(i in unique(df_m$model)) {
+        
+        df_model <- df_m %>%
+          filter(model == i) %>%
+          rename(Temp = temp)
+        
+        Bonn_forecast_hourly <- interpolate_gaps_hourly(
+          hourtemps = df_model,
+          latitude = 50.62,
+          daily_temps = NULL,
+          interpolate_remaining = TRUE,
+          return_extremes = FALSE,
+          minimum_values_for_solving = 4,
+          daily_patch_max_mean_bias = NA,
+          daily_patch_max_stdev_bias = NA
+        )
+        
+        data_forecast_model_clean <- Bonn_forecast_hourly$weather %>%
+          mutate(DATE = ymd(paste(Year, Month, Day)),
+                 YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day),
+                 Temp = Temp - 273.15) %>%
+          rename(Tmin = Tmin_source, Tmax = Tmax_source) %>%
+          select(DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
+        
+        # Save in list
+        weather_combined[[j]][[k]][[i]] <- data_forecast_model_clean
+      }
+   }
 }
+
 
 saveRDS(weather_combined, "data/Bonn_hourly_forecast_four_seasons.rds")
 weather_combined <- readRDS("data/Bonn_hourly_forecast_four_seasons.rds")
@@ -266,11 +266,10 @@ for (y in seq_along(weather_combined)) {
       
       df_current <- df_m[[l]] %>%
         mutate(
-          YEARMODA = ymd(YEARMODA),     
-          Tmin = as.numeric(Tmin),
-          Tmax = as.numeric(Tmax),
-          Temp = as.numeric(Temp)
-        )
+          YEARMODA = ymd(YEARMODA),
+          Tmin = as.numeric(ifelse(Tmin %in% c("interpolated", "solved"), NA, Tmin)), # to solve warnings
+          Tmax = as.numeric(ifelse(Tmax %in% c("interpolated", "solved"), NA, Tmax)),
+          Temp = as.numeric(Temp))
       
       # patching observed mean
       # I changed to date coz I want to have all days- some forecasts end on 28th
@@ -432,8 +431,8 @@ for (j in seq_along(four_seasons_phenoflex_loop)) {
       # Get the forecast year from the last date
       forecast_year <- as.integer(format(max(weather_data$DATE), "%Y"))
       
-      preseason_start <- as.Date(paste0(forecast_year - 1, "-09-01")) # bloom_dates change with this
-      season_end <- as.Date(paste0(forecast_year, "-12-31"))
+      preseason_start <- as.Date(paste0(forecast_year - 1, "-08-01")) # bloom_dates change with this
+      season_end <- as.Date(paste0(forecast_year, "-06-30")) # follow the default of genSeason
       
       # Filter seasonal data
       season_data <- weather_data[weather_data$DATE >= preseason_start & weather_data$DATE <= season_end, ]
@@ -588,12 +587,12 @@ for(sea in 1:4){
     mutate(
       list = factor(list, levels = sort(unique(list)))
     ) %>%
-    filter(!is.na(bloom_JDay))
+    filter(!is.na(bloom_JDay)) 
   
   # JDay for list 8
   jday_list8 <- df %>%
     filter(season == sea, list == 8) %>%
-    pull(bloom_JDay)
+    pull(bloom_JDay) 
   
   # Data frame for legend
   legend_df <- data.frame(x = jday_list8, label = "Observed bloom date")
@@ -603,7 +602,7 @@ for(sea in 1:4){
     group_by(list) %>%
     summarize(sd_val = sd(bloom_JDay, na.rm = TRUE), .groups = "drop") %>%
     filter(sd_val == 0) %>%
-    pull(list)
+    pull(list) 
   
   # Get all unique levels and remove '8' for y-axis labels
   y_levels <- unique(df_season$list)
@@ -612,7 +611,7 @@ for(sea in 1:4){
   # Plot
   p <- ggplot(df_season, aes(y = list, x = bloom_JDay)) +
     # Violin for lists other than 7
-    geom_violin(data = df_season %>% filter(list != 7),
+    geom_violin(data = df_season %>% filter(list != constant_lists),
                 aes(fill = list), trim = FALSE, scale = "width") +
     # Add horizontal lines for 5th, 50th, and 95th percentiles for violins
     stat_summary(
@@ -638,16 +637,26 @@ for(sea in 1:4){
                linetype = "dotted", size = 1) +
     # Change legend labels to month names
     scale_fill_discrete(
-      labels = c("3" = "December", "4" = "January", "5" = "February", "6" = "March", "7" = "April")
+      labels = c("1" = "October", 
+                 "2" = "November", 
+                 "3" = "December", 
+                 "4" = "January", 
+                 "5" = "February", 
+                 "6" = "March", 
+                 "7" = "April")
     ) +
+    
     scale_color_manual(values = c("Observed bloom date" = "black")) +
     labs(
       y = "Forecast month list",
       x = "Bloom Julian Day",
       fill = "Forecast List",
       color = "",
-      title = paste("Violin Plot of Bloom Julian Day for Season", sea)
-    ) +
+      title = paste("Violin Plot of Bloom Julian Day for Season", 
+                    sea, 
+                    sprintf("[%d-%d]", min(df_season$forecast_year, na.rm = TRUE), 
+                            min(df_season$forecast_year, na.rm = TRUE) + 1))
+      ) +
     scale_y_discrete(limits = rev(y_levels)) +
     scale_x_continuous(breaks = seq(jday_list8, 350, by = 25)) +
     theme_minimal() +
@@ -656,21 +665,116 @@ for(sea in 1:4){
   plots[[paste0("season", sea)]] <- p
 }
 
+# Plotting 
+
+for(sea in 1:4){
+  
+  # Filter for season and lists <= 8
+  df_season <- df %>%
+    filter(season == sea, list <= 8) %>%
+    mutate(
+      list = factor(list, levels = all_y_levels)
+    ) %>%
+    filter(!is.na(bloom_JDay))
+  
+  # JDay for list 8
+  jday_list8 <- df %>%
+    filter(season == sea, list == 8) %>%
+    pull(bloom_JDay)
+  
+  # Data frame for legend
+  legend_df <- data.frame(x = jday_list8, label = "Observed bloom date")
+  
+  # Identify lists with constant values for bold points
+  constant_lists <- df_season %>%
+    group_by(list) %>%
+    summarize(sd_val = sd(bloom_JDay, na.rm = TRUE), .groups = "drop") %>%
+    filter(sd_val == 0) %>%
+    pull(list)
+  
+  # Plot
+  p <- ggplot(df_season, aes(y = list, x = bloom_JDay)) +
+    geom_violin(data = df_season %>% filter(!(list %in% constant_lists)),
+                aes(fill = list), trim = FALSE, scale = "width") +
+    stat_summary(
+      data = df_season %>% filter(!(list %in% constant_lists)),
+      fun.data = function(x) {
+        data.frame(
+          ymin = quantile(x, 0.05, na.rm = TRUE),
+          ymax = quantile(x, 0.95, na.rm = TRUE),
+          y = quantile(x, 0.50, na.rm = TRUE)
+        )
+      },
+      geom = "pointrange",
+      color = "black",
+      size = 1,
+      fatten = 2
+    ) +
+    geom_point(data = df_season %>% filter(list %in% constant_lists),
+               aes(y = list, x = bloom_JDay, fill = list),
+               color = "black", size = 3, shape = 21) +
+    geom_vline(data = legend_df, aes(xintercept = x, color = label),
+               linetype = "dotted", size = 1) +
+
+    scale_fill_manual(
+      name = "Forecast List",
+      values = c("1" = "#E69F00", "2" = "#56B4E9", "3" = "#009E73",
+                 "4" = "#F0E442", "5" = "#0072B2", "6" = "#D55E00",
+                 "7" = "#CC79A7"),
+      breaks = all_y_levels,
+      labels = c("1" = "October", "2" = "November", "3" = "December",
+                 "4" = "January", "5" = "February", "6" = "March",
+                 "7" = "April")
+    ) +
+    
+    scale_color_manual(
+      name = "Legend",
+      values = c("Observed bloom date" = "black"),
+      breaks = "Observed bloom date",
+      labels = "Observed bloom date",
+      guide = "legend"
+    ) +
+    
+    labs(
+      y = "Forecast month list",
+      x = "Bloom Julian Day",
+      title = paste("Violin Plot of Bloom Julian Day for Season",
+                    sea,
+                    sprintf("[%d-%d]", min(df_season$forecast_year, na.rm = TRUE),
+                            min(df_season$forecast_year, na.rm = TRUE) + 1))
+    ) +
+    scale_y_discrete(limits = rev(all_y_levels)) +
+    scale_x_continuous(breaks = seq(jday_list8, 350, by = 10)) +
+    theme_minimal() +
+    # theme(
+    #   legend.position = "bottom",
+    #   legend.background = element_rect(fill = "white", color = "black", linewidth = 0.5),
+    #   legend.title = element_text(face = "bold"),
+    #   legend.text = element_text(size = 10)
+    # )
+  
+    theme(axis.text.y = element_text(angle = 0, hjust = 1),
+          legend.title = element_text(face = "bold"))
+
+  plots[[paste0("season", sea)]] <- p
+}
+
+
 # Display a plot 
 plots$season1
 plots$season2
 plots$season3
 plots$season4
 
+# Remove the legend from the first three plots
+plots$season1 <- plots$season1 + theme(legend.position = "none")
+plots$season2 <- plots$season2 + theme(legend.position = "none")
+plots$season3 <- plots$season3 + theme(legend.position = "none")
+
+# Combine the plots
 combined_plot <- plots$season1 + plots$season2 + plots$season3 + plots$season4 +
-  plot_layout(ncol = 2, guides = "collect") +  # collect one legend
-  plot_annotation(title = "Violin Plots of Bloom Julian Day for All Seasons") &
-  theme(
-    legend.position = "bottom",            
-    legend.background = element_rect(fill = "white", color = "black", linewidth = 0.5), # use linewidth
-    legend.title = element_text(face = "bold"),
-    legend.text = element_text(size = 10)
-  )
+  plot_layout(ncol = 2, guides = "collect") +
+  plot_annotation(title = "Violin Plots of Bloom Julian Day for All Seasons") 
 
 
 combined_plot
@@ -689,7 +793,7 @@ for(sea in 1:4){
   
   # Filter for predicted values (lists 3 through 7) to avoid the NA values
   predicted_df <- df %>%
-    filter(season == sea, list >= 3, list <= 7)
+    filter(season == sea, list >= 1, list <= 7)
   
   # Calculate RMSE for each forecast list
   rmse_results <- predicted_df %>%
@@ -702,22 +806,43 @@ for(sea in 1:4){
   
   # Append results to the main data frame
   RMSE_df <- bind_rows(RMSE_df, rmse_results)
+  
 }
 
-# Add month names for clarity
+print(RMSE_df)
+
+
 RMSE_df <- RMSE_df %>%
   mutate(
-    Month = case_when(
+    # Assign forecast month based on list
+    forecast_month = case_when(
+      list == 1 ~ "October",
+      list == 2 ~ "November",
       list == 3 ~ "December",
       list == 4 ~ "January",
       list == 5 ~ "February",
       list == 6 ~ "March",
-      list == 7 ~ "April"
+      list == 7 ~ "April",
+      TRUE ~ NA_character_
+    ),
+    # Assign forecast year based on season and list
+    forecast_year = case_when(
+      season == 1 & list %in% 1:3 ~ 2020,
+      season == 1 & list %in% 4:7 ~ 2021,
+      season == 2 & list %in% 1:3 ~ 2021,
+      season == 2 & list %in% 4:7 ~ 2022,
+      season == 3 & list %in% 1:3 ~ 2022,
+      season == 3 & list %in% 4:7 ~ 2023,
+      season == 4 & list %in% 1:3 ~ 2023,
+      season == 4 & list %in% 4:7 ~ 2024,
+      TRUE ~ NA_real_
     )
-  )
+  ) %>%
+  select(season, list, forecast_year, forecast_month, RMSE) %>%
+  arrange(season, list) 
 
-# Display the final table
 print(RMSE_df)
+
 
 # Save the RMSE_df data frame to a CSV file
 write.csv(RMSE_df, "data/RMSE_results.csv", row.names = FALSE)
