@@ -595,7 +595,7 @@ for(sea in 1:4){
     pull(bloom_JDay) 
   
   # Data frame for legend
-  legend_df <- data.frame(x = jday_list8, label = "Observed bloom date")
+  legend_df <- data.frame(x = jday_list8, label = "Observed bloom JDay")
   
   # Identify lists with constant values for bold points
   constant_lists <- df_season %>%
@@ -646,11 +646,11 @@ for(sea in 1:4){
                  "7" = "April")
     ) +
     
-    scale_color_manual(values = c("Observed bloom date" = "black")) +
+      scale_color_manual(values = c("Observed bloom JDay" = "black"), name = "Legend") +
     labs(
       y = "Forecast month list",
       x = "Bloom Julian Day",
-      fill = "Forecast List",
+      fill = "Forecast start month",
       color = "",
       title = paste("Violin Plot of Bloom Julian Day for Season", 
                     sea, 
@@ -659,10 +659,11 @@ for(sea in 1:4){
       ) +
     scale_y_discrete(limits = rev(y_levels)) +
     scale_x_continuous(breaks =  c(seq(from = min(df_season$bloom_JDay), 
-                                     to = 350, by = 25), jday_list8)  # sequence from start to 350
+                                     to = 350, by = 25), jday_list8)  
     ) +
     theme_minimal() +
-    theme(axis.text.y = element_text(angle = 0, hjust = 1))
+    theme(axis.text.y = element_text(angle = 0, hjust = 1),
+          legend.title = element_text(face = "bold"))
   
   plots[[paste0("season", sea)]] <- p
 }
