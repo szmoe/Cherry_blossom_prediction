@@ -569,7 +569,7 @@ bloom_dates_table <- bloom_dates_table[, c(
 # Check
 head(bloom_dates_table)
 tail(bloom_dates_table)
-
+min(bloom_dates_table$bloom_JDay)
 # Save to CSV
 write.csv(bloom_dates_table, "data/bloom_dates_table.csv", row.names = FALSE)
 write.csv(bloom_dates_table_full, "data/bloom_dates_table_full.csv", row.names = FALSE)
@@ -634,7 +634,7 @@ for(sea in 1:4){
                color = "black", size = 3, shape = 21) +
     # Observed JDay for list 8 (dotted line)
     geom_vline(data = legend_df, aes(xintercept = x, color = label),
-               linetype = "dotted", size = 1) +
+               linetype = "dotted", linewidth = 1) +
     # Change legend labels to month names
     scale_fill_discrete(
       labels = c("1" = "October", 
@@ -658,12 +658,9 @@ for(sea in 1:4){
                             min(df_season$forecast_year, na.rm = TRUE) + 1))
       ) +
     scale_y_discrete(limits = rev(y_levels)) +
-    scale_x_continuous(breaks = c(
-      # Breaks before jday_list8
-      seq(from = jday_list8 - 43, to = jday_list8 - 25, by = 25),
-      # Breaks at jday_list8 and after
-      seq(from = jday_list8, to = 350, by = 25)
-    )) +
+    scale_x_continuous(breaks =  c(seq(from = min(df_season$bloom_JDay), 
+                                     to = 350, by = 25), jday_list8)  # sequence from start to 350
+    ) +
     theme_minimal() +
     theme(axis.text.y = element_text(angle = 0, hjust = 1))
   
@@ -701,7 +698,7 @@ for(sea in 1:4){
     filter(season == sea, list == 8) %>%
     pull(bloom_JDay)
   
-  # Filter for predicted values (lists 3 through 7) to avoid the NA values
+  # Filter for predicted values 
   predicted_df <- df %>%
     filter(season == sea, list >= 1, list <= 7)
   
