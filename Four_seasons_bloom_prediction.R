@@ -611,11 +611,11 @@ for(sea in 1:4){
   # Plot
   p <- ggplot(df_season, aes(y = list, x = bloom_JDay)) +
     # Violin for lists other than 7
-    geom_violin(data = df_season %>% filter(list != constant_lists),
+    geom_violin(data = df_season %>% filter(!(list %in% constant_lists)),
                 aes(fill = list), trim = FALSE, scale = "width") +
     # Add horizontal lines for 5th, 50th, and 95th percentiles for violins
     stat_summary(
-      data = df_season %>% filter(list != 7),
+      data = df_season %>% filter(!(list %in% constant_lists)),
       fun.data = function(x) {
         data.frame(
           ymin = quantile(x, 0.05, na.rm = TRUE),
@@ -629,7 +629,7 @@ for(sea in 1:4){
       fatten = 2
     ) +
     # A single point for list 7
-    geom_point(data = df_season %>% filter(list == 7),
+    geom_point(data = df_season %>% filter(list %in% constant_lists),
                aes(y = list, x = bloom_JDay, fill = list),
                color = "black", size = 3, shape = 21) +
     # Observed JDay for list 8 (dotted line)
@@ -658,107 +658,17 @@ for(sea in 1:4){
                             min(df_season$forecast_year, na.rm = TRUE) + 1))
       ) +
     scale_y_discrete(limits = rev(y_levels)) +
-    scale_x_continuous(breaks = seq(jday_list8, 350, by = 25)) +
+    scale_x_continuous(breaks = c(
+      # Breaks before jday_list8
+      seq(from = jday_list8 - 43, to = jday_list8 - 25, by = 25),
+      # Breaks at jday_list8 and after
+      seq(from = jday_list8, to = 350, by = 25)
+    )) +
     theme_minimal() +
     theme(axis.text.y = element_text(angle = 0, hjust = 1))
   
   plots[[paste0("season", sea)]] <- p
 }
-
-# Plotting 
-
-for(sea in 1:4){
-  
-  # Filter for season and lists <= 8
-  df_season <- df %>%
-    filter(season == sea, list <= 8) %>%
-    mutate(
-      list = factor(list, levels = all_y_levels)
-    ) %>%
-    filter(!is.na(bloom_JDay))
-  
-  # JDay for list 8
-  jday_list8 <- df %>%
-    filter(season == sea, list == 8) %>%
-    pull(bloom_JDay)
-  
-  # Data frame for legend
-  legend_df <- data.frame(x = jday_list8, label = "Observed bloom date")
-  
-  # Identify lists with constant values for bold points
-  constant_lists <- df_season %>%
-    group_by(list) %>%
-    summarize(sd_val = sd(bloom_JDay, na.rm = TRUE), .groups = "drop") %>%
-    filter(sd_val == 0) %>%
-    pull(list)
-  
-  # Plot
-  p <- ggplot(df_season, aes(y = list, x = bloom_JDay)) +
-    geom_violin(data = df_season %>% filter(!(list %in% constant_lists)),
-                aes(fill = list), trim = FALSE, scale = "width") +
-    stat_summary(
-      data = df_season %>% filter(!(list %in% constant_lists)),
-      fun.data = function(x) {
-        data.frame(
-          ymin = quantile(x, 0.05, na.rm = TRUE),
-          ymax = quantile(x, 0.95, na.rm = TRUE),
-          y = quantile(x, 0.50, na.rm = TRUE)
-        )
-      },
-      geom = "pointrange",
-      color = "black",
-      size = 1,
-      fatten = 2
-    ) +
-    geom_point(data = df_season %>% filter(list %in% constant_lists),
-               aes(y = list, x = bloom_JDay, fill = list),
-               color = "black", size = 3, shape = 21) +
-    geom_vline(data = legend_df, aes(xintercept = x, color = label),
-               linetype = "dotted", size = 1) +
-
-    scale_fill_manual(
-      name = "Forecast List",
-      values = c("1" = "#E69F00", "2" = "#56B4E9", "3" = "#009E73",
-                 "4" = "#F0E442", "5" = "#0072B2", "6" = "#D55E00",
-                 "7" = "#CC79A7"),
-      breaks = all_y_levels,
-      labels = c("1" = "October", "2" = "November", "3" = "December",
-                 "4" = "January", "5" = "February", "6" = "March",
-                 "7" = "April")
-    ) +
-    
-    scale_color_manual(
-      name = "Legend",
-      values = c("Observed bloom date" = "black"),
-      breaks = "Observed bloom date",
-      labels = "Observed bloom date",
-      guide = "legend"
-    ) +
-    
-    labs(
-      y = "Forecast month list",
-      x = "Bloom Julian Day",
-      title = paste("Violin Plot of Bloom Julian Day for Season",
-                    sea,
-                    sprintf("[%d-%d]", min(df_season$forecast_year, na.rm = TRUE),
-                            min(df_season$forecast_year, na.rm = TRUE) + 1))
-    ) +
-    scale_y_discrete(limits = rev(all_y_levels)) +
-    scale_x_continuous(breaks = seq(jday_list8, 350, by = 10)) +
-    theme_minimal() +
-    # theme(
-    #   legend.position = "bottom",
-    #   legend.background = element_rect(fill = "white", color = "black", linewidth = 0.5),
-    #   legend.title = element_text(face = "bold"),
-    #   legend.text = element_text(size = 10)
-    # )
-  
-    theme(axis.text.y = element_text(angle = 0, hjust = 1),
-          legend.title = element_text(face = "bold"))
-
-  plots[[paste0("season", sea)]] <- p
-}
-
 
 # Display a plot 
 plots$season1
