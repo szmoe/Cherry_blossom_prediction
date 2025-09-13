@@ -46,7 +46,7 @@ seasonal_bloom_prediction <- function(month,
                        month[i], target_lon, target_lat)
       
       success <- tryCatch({
-        download_seasonal_forecast(
+        LarsChill::download_seasonal_forecast(
           year = ifelse(i <= max_pos, download_year[j], download_year[j] + 1),
           month = month[i],
           area = area,
@@ -62,9 +62,9 @@ seasonal_bloom_prediction <- function(month,
       
       if (!success) next 
       
-      forecast_season <- extract_seasonal_forecast(fname,
-                                                   target_lat = target_lat,
-                                                   target_lon = target_lon)
+      forecast_season <- LarsChill::extract_seasonal_forecast(fname,
+                                                              target_lat = target_lat,
+                                                              target_lon = target_lon)
       forecast[[j]][[i]] <- forecast_season
     }
   }
@@ -85,11 +85,10 @@ seasonal_bloom_prediction <- function(month,
       
       for(i in unique(df_m$model)) {
         
-        df_model <- df_m %>%
-          filter(model == i) %>%
-          rename(Temp = temp)
+        filtered_df <- dplyr::filter(df_m, model == i)
+        df_model <- dplyr::rename(filtered_df, Temp = temp)
         
-        forecast_hourly <- interpolate_gaps_hourly(
+        forecast_hourly <- chillR::interpolate_gaps_hourly(
           hourtemps = df_model,
           latitude = target_lat,
           daily_temps = NULL,
@@ -100,14 +99,20 @@ seasonal_bloom_prediction <- function(month,
           daily_patch_max_stdev_bias = NA
         )
         
-        data_forecast_model_clean <- forecast_hourly$weather %>%
-          mutate(DATE = ymd(paste(Year, Month, Day)),
-                 YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day),
-                 Temp = Temp - 273.15) %>%
-          rename(Tmin = Tmin_source, Tmax = Tmax_source) %>%
-          select(DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
+        data_forecast_model_clean <- dplyr::select(
+          dplyr::rename(
+            dplyr::mutate(
+              forecast_hourly$weather,
+              DATE = lubridate::ymd(paste(Year, Month, Day)),
+              YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day),
+              Temp = Temp - 273.15
+            ),
+            Tmin = Tmin_source,
+            Tmax = Tmax_source
+          ),
+          DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp
+        )
         
-        # Save in list
         weather_combined[[j]][[k]][[i]] <- data_forecast_model_clean
       }
     }
@@ -139,9 +144,13 @@ seasonal_bloom_prediction <- function(month,
   
   data_observed_hourly  <- chillR::stack_hourly_temps(data_observed, latitude = target_lat)
   
-  data_observed_formatted <- data_observed_hourly$hourtemps %>%
-    dplyr::mutate(DATE = lubridate::ymd(paste(Year, Month, Day))) %>%
-    dplyr::select(DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
+  data_observed_formatted <- dplyr::select(
+    dplyr::mutate(
+      data_observed_hourly$hourtemps,
+      DATE = lubridate::ymd(paste(Year, Month, Day))
+    ),
+    DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp
+  )
   
   # save observed data
   saveRDS(data_observed_formatted, "seasonal_hourly_observed_data.rds")
@@ -169,10 +178,9 @@ seasonal_bloom_prediction <- function(month,
   
   data_observed_30year <- data_clean_mean[[1]]
   
-  data_observed_hourly_30year  <- stack_hourly_temps(data_observed_30year, latitude = target_lat)
-  data_observed_hourly_30year_df <- bind_rows(data_observed_hourly_30year)
-  data_observed_hourly_30year_df <- data_observed_hourly_30year_df %>%
-    unnest(hourtemps)
+  data_observed_hourly_30year  <- chillR::stack_hourly_temps(data_observed_30year, latitude = target_lat)
+  data_observed_hourly_30year_df <- dplyr::bind_rows(data_observed_hourly_30year)
+  data_observed_hourly_30year_df <- tidyr::unnest(data_observed_hourly_30year_df, hourtemps)
   
   data_observed_mean <- list()
   
@@ -180,36 +188,56 @@ seasonal_bloom_prediction <- function(month,
     
     if ((forecast_year[i] %% 4 == 0 & forecast_year[i] %% 100 != 0) | (forecast_year[i] %% 400 == 0)) {
       
-      longterm_hourly_mean <- data_observed_hourly_30year_df %>%
-        group_by(Month, Day, Hour) %>%
-        summarise(
-          Tmin  = mean(Tmin,  na.rm = TRUE),
-          Tmax  = mean(Tmax,  na.rm = TRUE),
-          Temp  = mean(Temp,  na.rm = TRUE),
-          .groups = "drop"
-        ) %>%
-        mutate(Year = forecast_year[i],
-               YEARMODA = as.integer(sprintf("%04d%02d%02d", Year, Month, Day))) %>%
-        select(YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
+      longterm_hourly_mean <- dplyr::select(
+        dplyr::mutate(
+          dplyr::summarise(
+            dplyr::group_by(
+              data_observed_hourly_30year_df,
+              Month, Day, Hour
+            ),
+            Tmin  = mean(Tmin, na.rm = TRUE),
+            Tmax  = mean(Tmax, na.rm = TRUE),
+            Temp  = mean(Temp, na.rm = TRUE),
+            .groups = "drop"
+          ),
+          Year = forecast_year[i],
+          YEARMODA = as.integer(sprintf("%04d%02d%02d", Year, Month, Day))
+        ),
+        YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp
+      )
+      
     } else {
       
-      longterm_hourly_mean <- data_observed_hourly_30year_df %>%
-        group_by(Month, Day, Hour) %>%
-        summarise(
-          Tmin  = mean(Tmin,  na.rm = TRUE),
-          Tmax  = mean(Tmax,  na.rm = TRUE),
-          Temp  = mean(Temp,  na.rm = TRUE),
-          .groups = "drop"
-        ) %>%
-        filter(!(Month == 2 & Day == 29)) %>%
-        mutate(Year = forecast_year[i],
-               YEARMODA = as.integer(sprintf("%04d%02d%02d", Year, Month, Day))) %>%
-        select(YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
+      longterm_hourly_mean <- dplyr::select(
+        dplyr::mutate(
+          dplyr::filter(
+            dplyr::summarise(
+              dplyr::group_by(
+                data_observed_hourly_30year_df,
+                Month, Day, Hour
+              ),
+              Tmin  = mean(Tmin, na.rm = TRUE),
+              Tmax  = mean(Tmax, na.rm = TRUE),
+              Temp  = mean(Temp, na.rm = TRUE),
+              .groups = "drop"
+            ),
+            !(Month == 2 & Day == 29)
+          ),
+          Year = forecast_year[i],
+          YEARMODA = as.integer(sprintf("%04d%02d%02d", Year, Month, Day))
+        ),
+        YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp
+      )
+      
     }
     
-    data_observed_mean[[i]] <- longterm_hourly_mean %>%
-      mutate(DATE = ymd(paste(Year, Month, Day))) %>%
-      select(DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
+    data_observed_mean[[i]] <- dplyr::select(
+      dplyr::mutate(
+        longterm_hourly_mean,
+        DATE = lubridate::ymd(paste(Year, Month, Day))
+      ),
+      DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp
+    )
     
   }
   
@@ -248,36 +276,46 @@ seasonal_bloom_prediction <- function(month,
         years_in_dfm <- unique(df_m[[l]]$Year)
         
         if (length(years_in_dfm) > 1) {
-          patch_observe <- data_observed_formatted %>%
-            filter(Year == obs_year & Month <= obs_month)
+          
+          patch_observe <- dplyr::filter(
+            data_observed_formatted,
+            Year == obs_year & Month <= obs_month
+          )
+          
         } else {
-          patch_observe <- data_observed_formatted %>%
-            filter(Year == obs_year - 1 | Year == obs_year & Month <= obs_month)
+          
+          patch_observe <- dplyr::filter(
+            data_observed_formatted,
+            Year == (obs_year - 1) | (Year == obs_year & Month <= obs_month)
+          )
         }
         
-        patch_observe$YEARMODA <- ymd(as.character(patch_observe$YEARMODA))
+        patch_observe$YEARMODA <- lubridate::ymd(as.character(patch_observe$YEARMODA))
         
-        df_current <- df_m[[l]] %>%
-          mutate(
-            YEARMODA = ymd(YEARMODA),
-            Tmin = as.numeric(ifelse(Tmin %in% c("interpolated", "solved"), NA, Tmin)),
-            Tmax = as.numeric(ifelse(Tmax %in% c("interpolated", "solved"), NA, Tmax)),
-            Temp = as.numeric(Temp))
+        df_current <- dplyr::mutate(
+          df_m[[l]],
+          YEARMODA = lubridate::ymd(YEARMODA),
+          Tmin = as.numeric(ifelse(Tmin %in% c("interpolated", "solved"), NA, Tmin)),
+          Tmax = as.numeric(ifelse(Tmax %in% c("interpolated", "solved"), NA, Tmax)),
+          Temp = as.numeric(Temp)
+        )
         
         last_date <- tail(df_m[[l]]$DATE, 1)
         
-        patch_month <- data_observed_mean[[k]] %>%
-          filter(DATE > last_date)
+        patch_month <- dplyr::filter(data_observed_mean[[k]], DATE > last_date)
         
-        patch_month$YEARMODA <- ymd(as.character(patch_month$YEARMODA))
+        patch_month$YEARMODA <- lubridate::ymd(as.character(patch_month$YEARMODA))
         
-        phenoflex_loop <- bind_rows(patch_observe, df_current, patch_month)
+        phenoflex_loop <- dplyr::bind_rows(patch_observe, df_current, patch_month)
         
-        phenoflex_loop_aligned <- phenoflex_loop %>%
-          mutate(
-            DATE = ymd(paste(Year, Month, Day)),
-            YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day)) %>%
-          select(DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
+        phenoflex_loop_aligned <- dplyr::select(
+          dplyr::mutate(
+            phenoflex_loop,
+            DATE = lubridate::ymd(paste(Year, Month, Day)),
+            YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day)
+          ),
+          DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp
+        )
         
         weather_combined_observed[[y]][[m]][[l]] <- phenoflex_loop_aligned
       }
@@ -348,35 +386,57 @@ seasonal_bloom_prediction <- function(month,
         
         phenoflex <- phenoflex_weather_data[[j]][[last_month_index]]
         
-        data_observed_keyed <- data_observed_formatted %>%
-          mutate(key_obs = sprintf(
-            "%04d-%02d-%02d-%02d",
-            as.numeric(Year), as.numeric(Month), as.numeric(Day), as.numeric(Hour)
-          )) %>%
-          select(key_obs, Tmin_obs = Tmin, Tmax_obs = Tmax, Temp_obs = Temp)
+        data_observed_keyed <- dplyr::select(
+          dplyr::mutate(
+            data_observed_formatted,
+            key_obs = sprintf(
+              "%04d-%02d-%02d-%02d",
+              as.numeric(Year), as.numeric(Month), as.numeric(Day), as.numeric(Hour)
+            )
+          ),
+          key_obs,
+          Tmin_obs = Tmin,
+          Tmax_obs = Tmax,
+          Temp_obs = Temp
+        )
         
-        data_mean_keyed <- data_observed_mean[[j]] %>%
-          mutate(key_mean = sprintf(
-            "%02d-%02d-%02d",
-            as.numeric(Month), as.numeric(Day), as.numeric(Hour)
-          )) %>%
-          select(key_mean, Tmin_mean = Tmin, Tmax_mean = Tmax, Temp_mean = Temp)
+        data_mean_keyed <- dplyr::select(
+          dplyr::mutate(
+            data_observed_mean[[j]],
+            key_mean = sprintf(
+              "%02d-%02d-%02d",
+              as.numeric(Month), as.numeric(Day), as.numeric(Hour)
+            )
+          ),
+          key_mean,
+          Tmin_mean = Tmin,
+          Tmax_mean = Tmax,
+          Temp_mean = Temp
+        )
         
-        phenoflex <- phenoflex %>%
-          mutate(
-            key_obs  = sprintf("%04d-%02d-%02d-%02d", Year, Month, Day, Hour),
-            key_mean = sprintf("%02d-%02d-%02d", Month, Day, Hour)
-          ) %>%
-          left_join(data_observed_keyed, by = "key_obs") %>%
-          left_join(data_mean_keyed, by = "key_mean") %>%
-          mutate(
-            Tmin = coalesce(Tmin_obs, Tmin_mean),
-            Tmax = coalesce(Tmax_obs, Tmax_mean),
-            Temp = coalesce(Temp_obs, Temp_mean),
-            DATE = make_date(Year, Month, Day),
+        phenoflex <- dplyr::select(
+          dplyr::mutate(
+            dplyr::left_join(
+              dplyr::left_join(
+                dplyr::mutate(
+                  phenoflex,
+                  key_obs  = sprintf("%04d-%02d-%02d-%02d", Year, Month, Day, Hour),
+                  key_mean = sprintf("%02d-%02d-%02d", Month, Day, Hour)
+                ),
+                data_observed_keyed,
+                by = "key_obs"
+              ),
+              data_mean_keyed,
+              by = "key_mean"
+            ),
+            Tmin = dplyr::coalesce(Tmin_obs, Tmin_mean),
+            Tmax = dplyr::coalesce(Tmax_obs, Tmax_mean),
+            Temp = dplyr::coalesce(Temp_obs, Temp_mean),
+            DATE = lubridate::make_date(Year, Month, Day),
             YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day)
-          ) %>%
-          select(DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
+          ),
+          DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp
+        )
         
         phenoflex_loop[[j]][[last_month_index]] <- list(phenoflex)
       }
@@ -412,7 +472,7 @@ seasonal_bloom_prediction <- function(month,
                                       weather_data$DATE <= preseason_end, ]
         
         # run PhenoFlex
-        res <- PhenoFlex(
+        res <- chillR::PhenoFlex(
           temp = season_data$Temp,
           times = seq_along(season_data$Temp),
           A0 = A0, 
@@ -452,4 +512,5 @@ seasonal_bloom_prediction <- function(month,
   
   saveRDS(seasonal_bloom_dates, "seasonal_bloom_dates.rds")
   return(seasonal_bloom_dates)
+  
 }
