@@ -1,6 +1,5 @@
 
 ## Build a function to predict bloom dates seasonally based on weather data
-# Note: need to be at least two seasons
 
 seasonal_bloom_prediction <- function(month,
                                       area,
