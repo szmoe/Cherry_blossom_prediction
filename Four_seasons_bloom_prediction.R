@@ -366,7 +366,7 @@ four_seasons_weather_data <- list()
 
 Bonn_forecast <- readRDS("data/Bonn_forecast_four_seasons.rds")
 data_observed <- readRDS("data/Bonn_observed_four_seasons.rds")
-data_observed_mean <- readRDS("data/Bonn_longterm_mean_four_seasons.rds")
+# data_observed_mean <- readRDS("data/Bonn_longterm_mean_four_seasons.rds")
 #weather_combined_four_seasons <- readRDS("data/Bonn_weather_combined_four_seasons.rds")
 
 for (y in seq_along(weather_combined_four_seasons)) {
@@ -378,8 +378,8 @@ for (y in seq_along(weather_combined_four_seasons)) {
   # Compute last observed and forecast dates for this year
   obs_last <- as.Date(sprintf(
     "%d-%02d-01",
-    tail(data_observed_mean[[y]]$Year, 1),
-    tail(data_observed_mean[[y]]$Month, 1)
+    tail(data_observed$Year, 1),
+    tail(data_observed$Month, 1)
   ))
   
   forecast_last <- as.Date(sprintf(
