@@ -102,6 +102,9 @@ saveRDS(data_observed_formatted, "data/Bonn_observed_four_seasons.rds")
 data_observed <- readRDS("data/Bonn_observed_four_seasons.rds")
 str(data_observed)
 
+# Run bias correction
+# predicted_bias_corrected <- mva_bias_correction_forecast(data_observed, Bonn_forecast)
+
 # Get long-term mean data
 # Download 30 years temperature data
 weather_dwd_mean <- chillR::handle_dwd(action = 'list_stations', location = c(long, lat), 
@@ -177,26 +180,83 @@ data_observed_mean <- readRDS("data/Bonn_longterm_mean_four_seasons.rds")
 
 ## Find hourly forecast 
 Bonn_forecast <- readRDS("data/Bonn_forecast_four_seasons.rds")
-# Loop 
-weather_combined <- list()
-
+target_lat <- 50.62
+target_lon <- 7
+## Bias correction
+bias_correction <- list()
 for(j in 1:length(Bonn_forecast)) {
   
   df_j <- Bonn_forecast[[j]]  
-  weather_combined[[j]] <- list()  
+  bias_correction[[j]] <- list()  
   
   for (k in 1:length(df_j)) {
     df_m <- df_j[[k]]
-    weather_combined[[j]][[k]] <- list()
-  
+    bias_correction[[j]][[k]] <- list()
+    
     for(i in unique(df_m$model)) {
-        
-        df_model <- df_m %>%
-          filter(model == i) %>%
-          rename(Temp = temp)
+      
+      df_model_i <- df_m[df_m$model == i, ]  # subset rows for this model
+      
+      predicted_bias_corrected <- mva_bias_correction_forecast(data_observed, df_model_i)
+      
+      # Save
+      bias_correction[[j]][[k]][[i]] <- predicted_bias_corrected
+    }
+    
+  }
+  
+}
+
+saveRDS(bias_correction, "data/Bonn_bias_corrected_forecast.rds")
+bias_correction <- readRDS("data/Bonn_bias_corrected_forecast.rds")
+
+##=================
+# Load the data
+bias_correction <- readRDS("data/Bonn_bias_corrected_forecast.rds")
+
+# Interpolate bias-corrected forecast data
+weather_combined1 <- list()
+
+source("function/interpolate_forecast_function.r")
+
+for (j in 1:length(bias_correction)) {
+  weather_combined1[[j]] <- list()
+  
+  for (k in 1:length(bias_correction[[j]])) {
+    bias_data <- bias_correction[[j]][[k]]
+    weather_combined1[[j]][[k]] <- list()
+    
+    weather_combined1[[j]][[k]] <- lapply(
+      # do this coz of empty list in October-- shows error when unequal nested lists
+      if (is.data.frame(bias_data)) list(bias_data) else bias_data,
+      interpolate_hourly_forecast,
+      latitude = 50.62
+    )
+  }
+}
+
+saveRDS(weather_combined1, "data/Bonn_bias_corrected_weather_combined1.rds")
+weather_combined1 <- readRDS("data/Bonn_bias_corrected_weather_combined1.rds")
+##===================
+# Loop without the helper function
+
+weather_combined <- list()
+
+for (j in seq_along(bias_correction)) {
+  weather_combined[[j]] <- list()
+  
+  for (k in seq_along(bias_correction[[j]])) {
+    weather_combined[[j]][[k]] <- list()
+    
+    for (l in seq_along(bias_correction[[j]][[k]])) {
+      df_l <- bias_correction[[j]][[k]][[l]]
+      weather_combined[[j]][[k]][[l]] <- list()
+      
+      df_models <- dplyr::rename(df_l, Temp = temp_corrected)
+  
         
         Bonn_forecast_hourly <- interpolate_gaps_hourly(
-          hourtemps = df_model,
+          hourtemps = df_models,
           latitude = 50.62,
           daily_temps = NULL,
           interpolate_remaining = TRUE,
@@ -208,20 +268,22 @@ for(j in 1:length(Bonn_forecast)) {
         
         data_forecast_model_clean <- Bonn_forecast_hourly$weather %>%
           mutate(DATE = ymd(paste(Year, Month, Day)),
-                 YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day),
-                 Temp = Temp - 273.15) %>%
-          rename(Tmin = Tmin_source, Tmax = Tmax_source) %>%
-          select(DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp)
+                 YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day)) %>%
+         # rename(Tmin = Tmin_source, Tmax = Tmax_source) %>%
+          select(DATE, YEARMODA, Year, Month, Day, Hour, Temp, model)
         
         # Save in list
-        weather_combined[[j]][[k]][[i]] <- data_forecast_model_clean
+        weather_combined[[j]][[k]][[l]] <- data_forecast_model_clean
       }
-   }
+    }
 }
 
 
-saveRDS(weather_combined, "data/Bonn_hourly_forecast_four_seasons.rds")
-weather_combined <- readRDS("data/Bonn_hourly_forecast_four_seasons.rds")
+str(weather_combined)
+saveRDS(weather_combined, "data/Bonn_bias_corrected_weather_combined.rds")
+weather_combined <- readRDS("data/Bonn_bias_corrected_weather_combined.rds")
+
+###
 
 # Loop using hourly forecast
 
@@ -267,8 +329,8 @@ for (y in seq_along(weather_combined)) {
       df_current <- df_m[[l]] %>%
         mutate(
           YEARMODA = ymd(YEARMODA),
-          Tmin = as.numeric(ifelse(Tmin %in% c("interpolated", "solved"), NA, Tmin)), # to solve warnings
-          Tmax = as.numeric(ifelse(Tmax %in% c("interpolated", "solved"), NA, Tmax)),
+         # Tmin = as.numeric(ifelse(Tmin %in% c("interpolated", "solved"), NA, Tmin)), # to solve warnings
+         # Tmax = as.numeric(ifelse(Tmax %in% c("interpolated", "solved"), NA, Tmax)),
           Temp = as.numeric(Temp))
       
       # patching observed mean
@@ -294,8 +356,8 @@ for (y in seq_along(weather_combined)) {
   }
 }
 
-saveRDS(weather_combined_observed, "data/Bonn_weather_combined_four_seasons.rds")
-weather_combined_four_seasons <- readRDS("data/Bonn_weather_combined_four_seasons.rds")
+saveRDS(weather_combined_observed, "data/Bonn_bias_weather_combined_four_seasons.rds")
+weather_combined_four_seasons <- readRDS("data/Bonn_bias_weather_combined_four_seasons.rds")
 
 ## Add a new list and replace with observed data
 # Here we add a new list to the forecast for observed data
@@ -305,7 +367,7 @@ four_seasons_weather_data <- list()
 Bonn_forecast <- readRDS("data/Bonn_forecast_four_seasons.rds")
 data_observed <- readRDS("data/Bonn_observed_four_seasons.rds")
 data_observed_mean <- readRDS("data/Bonn_longterm_mean_four_seasons.rds")
-weather_combined_four_seasons <- readRDS("data/Bonn_weather_combined_four_seasons.rds")
+#weather_combined_four_seasons <- readRDS("data/Bonn_weather_combined_four_seasons.rds")
 
 for (y in seq_along(weather_combined_four_seasons)) {
   
@@ -410,8 +472,8 @@ for (j in seq_along(four_seasons_weather_data)) {
   }
 }
 
-saveRDS(four_seasons_phenoflex_loop, "data/Bonn_four_seasons_phenoflex_loop.rds")
-four_seasons_phenoflex_loop <- readRDS("data/Bonn_four_seasons_phenoflex_loop.rds")
+saveRDS(four_seasons_phenoflex_loop, "data/Bonn_bias_four_seasons_phenoflex_loop.rds")
+four_seasons_phenoflex_loop <- readRDS("data/Bonn_bias_four_seasons_phenoflex_loop.rds")
 
 
 ## Predict bloom dates for cherry blossom for four seasons
