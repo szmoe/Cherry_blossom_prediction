@@ -6,7 +6,8 @@ seasonal_bloom_prediction <- function(month,
                                       download_year,
                                       target_lat,
                                       target_lon,
-                                      time_interval,
+                                      observed_time_interval,
+                                      mean_time_interval,
                                       forecast_year,
                                       season_start,
                                       season_end,
@@ -26,7 +27,15 @@ seasonal_bloom_prediction <- function(month,
                                       zc = 190,
                                       stopatzc = TRUE,
                                       deg_celsius = TRUE,
-                                      basic_output = TRUE) {
+                                      basic_output = TRUE,
+                                      daily_temps = NULL,
+                                      interpolate_remaining = TRUE,
+                                      return_extremes = FALSE,
+                                      minimum_values_for_solving = 5,
+                                      runn_mean_test_length = 5,
+                                      runn_mean_test_diff = 5,
+                                      daily_patch_max_mean_bias = NA,
+                                      daily_patch_max_stdev_bias = NA) {
   
   # =======================
   # Forecast temp
@@ -71,65 +80,16 @@ seasonal_bloom_prediction <- function(month,
   # Save forecasts
   saveRDS(forecast,"seasonal_forecast_data.rds")
   
-  weather_combined <- list()
-  
-  for(j in 1:length(forecast)) {
-    
-    df_j <- forecast[[j]]  
-    weather_combined[[j]] <- list()  
-    
-    for (k in 1:length(df_j)) {
-      df_m <- df_j[[k]]
-      weather_combined[[j]][[k]] <- list()
-      
-      for(i in unique(df_m$model)) {
-        
-        filtered_df <- dplyr::filter(df_m, model == i)
-        df_model <- dplyr::rename(filtered_df, Temp = temp)
-        
-        forecast_hourly <- chillR::interpolate_gaps_hourly(
-          hourtemps = df_model,
-          latitude = target_lat,
-          daily_temps = NULL,
-          interpolate_remaining = TRUE,
-          return_extremes = FALSE,
-          minimum_values_for_solving = 4,
-          daily_patch_max_mean_bias = NA,
-          daily_patch_max_stdev_bias = NA
-        )
-        
-        data_forecast_model_clean <- dplyr::select(
-          dplyr::rename(
-            dplyr::mutate(
-              forecast_hourly$weather,
-              DATE = lubridate::ymd(paste(Year, Month, Day)),
-              YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day),
-              Temp = Temp - 273.15
-            ),
-            Tmin = Tmin_source,
-            Tmax = Tmax_source
-          ),
-          DATE, YEARMODA, Year, Month, Day, Hour, Tmin, Tmax, Temp
-        )
-        
-        weather_combined[[j]][[k]][[i]] <- data_forecast_model_clean
-      }
-    }
-  }
-  
-  
-  saveRDS(weather_combined, "seasonal_hourly_forecast_data.rds")
-  
   # =======================
   # Observed temp
   # =======================
   weather_dwd <- chillR::handle_dwd(action = 'list_stations', 
                                     location = c(target_lon, target_lat), 
-                                    time_interval = time_interval)
+                                    time_interval = observed_time_interval)
   
   data <- chillR::handle_dwd(action = "download_weather",
                              location = weather_dwd[1:25, "Station_ID"],
-                             time_interval = time_interval,
+                             time_interval = observed_time_interval,
                              stations_to_choose_from = 50,
                              station_list = weather_dwd,
                              drop_most = TRUE,
@@ -154,6 +114,86 @@ seasonal_bloom_prediction <- function(month,
   # save observed data
   saveRDS(data_observed_formatted, "seasonal_hourly_observed_data.rds")
   
+  # =======================
+  # Bias correction
+  # =======================
+  
+  bias_correction <- list()
+  for(j in 1:length(forecast)) {
+    
+    df_j <- forecast[[j]]  
+    bias_correction[[j]] <- list()  
+    
+    for (k in 1:length(df_j)) {
+      df_m <- df_j[[k]]
+      bias_correction[[j]][[k]] <- list()
+      
+      for(i in unique(df_m$model)) {
+        
+        df_model_i <- df_m[df_m$model == i, ]  
+        
+        predicted_bias_corrected <- LarsChill::mva_bias_correction_forecast(data_observed, 
+                                                                 df_model_i)
+        
+        # Save
+        bias_correction[[j]][[k]][[i]] <- predicted_bias_corrected
+      }
+      
+    }
+    
+  }
+  
+  # Save bias-corrected forecast data
+  
+  saveRDS(bias_correction, "bias_corrected_seasonal_forecast_data.rds")
+  
+  
+  # ===========================
+  # Interpolate hourly forecast
+  # ===========================
+  
+  weather_combined <- list()
+  
+  for (j in seq_along(bias_correction)) {
+    weather_combined[[j]] <- list()
+    
+    for (k in seq_along(bias_correction[[j]])) {
+      weather_combined[[j]][[k]] <- list()
+      
+      for (l in seq_along(bias_correction[[j]][[k]])) {
+        df_l <- bias_correction[[j]][[k]][[l]]
+        weather_combined[[j]][[k]][[l]] <- list()
+        
+        df_models <- dplyr::rename(df_l, Temp = temp_corrected)
+        
+        forecast_hourly <- interpolate_gaps_hourly(
+          hourtemps = df_models,
+          latitude = target_lat,
+          daily_temps = daily_temps,
+          interpolate_remaining = interpolate_remaining,
+          return_extremes = return_extremes,
+          minimum_values_for_solving = minimum_values_for_solving,
+          daily_patch_max_mean_bias = daily_patch_max_mean_bias,
+          daily_patch_max_stdev_bias = daily_patch_max_stdev_bias
+        )
+        
+        data_forecast_model_clean <- dplyr::select(
+          dplyr::rename(
+            dplyr::mutate(
+              forecast_hourly$weather,
+              DATE = lubridate::ymd(paste(Year, Month, Day)),
+              YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day))
+            ),
+          DATE, YEARMODA, Year, Month, Day, Hour, Temp, model
+        )
+        
+        weather_combined[[j]][[k]][[l]] <- data_forecast_model_clean
+      }
+    }
+  }
+  
+  
+  saveRDS(weather_combined, "seasonal_hourly_forecast_data.rds")
   
   # =======================
   # Long-term mean temp 
@@ -161,11 +201,11 @@ seasonal_bloom_prediction <- function(month,
   
   weather_dwd_mean <- chillR::handle_dwd(action = 'list_stations', location = c(target_lon, 
                                                                                 target_lat), 
-                                         time_interval = c(19940101, 20241231))
+                                         time_interval = mean_time_interval)
   
   data_mean <- chillR::handle_dwd(action = "download_weather",
                                   location = weather_dwd_mean[1 : 25, "Station_ID"],
-                                  time_interval = c(19940101, 20241231),
+                                  time_interval = mean_time_interval,
                                   stations_to_choose_from = 50,
                                   station_list = weather_dwd_mean,
                                   drop_most = TRUE,
@@ -175,11 +215,12 @@ seasonal_bloom_prediction <- function(month,
   
   data_clean_mean <- chillR::handle_dwd(data_mean)
   
-  data_observed_30year <- data_clean_mean[[1]]
+  data_observed_mean_year <- data_clean_mean[[1]]
   
-  data_observed_hourly_30year  <- chillR::stack_hourly_temps(data_observed_30year, latitude = target_lat)
-  data_observed_hourly_30year_df <- dplyr::bind_rows(data_observed_hourly_30year)
-  data_observed_hourly_30year_df <- tidyr::unnest(data_observed_hourly_30year_df, hourtemps)
+  data_observed_hourly_mean_year  <- chillR::stack_hourly_temps(data_observed_mean_year, 
+                                                                latitude = target_lat)
+  data_observed_hourly_mean_year_df <- dplyr::bind_rows(data_observed_hourly_mean_year)
+  data_observed_hourly_mean_year_df <- tidyr::unnest(data_observed_hourly_mean_year_df, hourtemps)
   
   data_observed_mean <- list()
   
@@ -191,7 +232,7 @@ seasonal_bloom_prediction <- function(month,
         dplyr::mutate(
           dplyr::summarise(
             dplyr::group_by(
-              data_observed_hourly_30year_df,
+              data_observed_hourly_mean_year_df,
               Month, Day, Hour
             ),
             Tmin  = mean(Tmin, na.rm = TRUE),
@@ -212,7 +253,7 @@ seasonal_bloom_prediction <- function(month,
           dplyr::filter(
             dplyr::summarise(
               dplyr::group_by(
-                data_observed_hourly_30year_df,
+                data_observed_hourly_mean_year_df,
                 Month, Day, Hour
               ),
               Tmin  = mean(Tmin, na.rm = TRUE),
@@ -294,8 +335,6 @@ seasonal_bloom_prediction <- function(month,
         df_current <- dplyr::mutate(
           df_m[[l]],
           YEARMODA = lubridate::ymd(YEARMODA),
-          Tmin = as.numeric(ifelse(Tmin %in% c("interpolated", "solved"), NA, Tmin)),
-          Tmax = as.numeric(ifelse(Tmax %in% c("interpolated", "solved"), NA, Tmax)),
           Temp = as.numeric(Temp)
         )
         
@@ -336,8 +375,8 @@ seasonal_bloom_prediction <- function(month,
     
     obs_last <- as.Date(sprintf(
       "%d-%02d-01",
-      tail(data_observed_mean[[y]]$Year, 1),
-      tail(data_observed_mean[[y]]$Month, 1)
+      tail(data_observed_formatted$Year, 1),
+      tail(data_observed_formatted$Month, 1)
     ))
     
     forecast_last <- as.Date(sprintf(
