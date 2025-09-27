@@ -29,9 +29,8 @@ interpolate_hourly_forecast <- function(bias_corrected_df,
   weather$DATE <- lubridate::ymd(paste(weather$Year, weather$Month, weather$Day))
   weather$YEARMODA <- sprintf("%04d%02d%02d", weather$Year, weather$Month, weather$Day)
   weather$model <- unique(df_model$model)
-  
   hourly_forecast_data <- dplyr::select(
-    weather, DATE, YEARMODA, Year, Month, Day, Hour, Temp, model
+    DATE, YEARMODA, Year, Month, Day, Hour, Temp, model
   )
   
   return(hourly_forecast_data)
