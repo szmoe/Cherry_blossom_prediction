@@ -124,7 +124,7 @@ seasonal_bloom_prediction <- function(month,
         
         df_model_i <- df_m[df_m$model == i, ]  
         
-        predicted_bias_corrected <- LarsChill::mva_bias_correction_forecast(data_observed, 
+        predicted_bias_corrected <- LarsChill::mva_bias_correction_forecast(data_observed_formatted, 
                                                                  df_model_i)
         
         # Save
