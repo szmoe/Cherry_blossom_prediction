@@ -179,7 +179,8 @@ seasonal_bloom_prediction <- function(month,
           dplyr::mutate(
             forecast_hourly$weather,
             DATE = lubridate::ymd(paste(Year, Month, Day)),
-            YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day)
+            YEARMODA = sprintf("%04d%02d%02d", Year, Month, Day),
+            Temp = Temp - 273.15
           ),
           DATE, YEARMODA, Year, Month, Day, Hour, Temp, model
         )
