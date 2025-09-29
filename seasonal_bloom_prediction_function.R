@@ -159,8 +159,7 @@ seasonal_bloom_prediction <- function(month,
         # Ensure chronological order coz the bias correction function sometimes
         # put last date at the top 
         # (when last row of last forecast is same as first row of first forecast)
-        df_l <- df_l %>%
-          dplyr::arrange(Year, Month, Day, Hour)
+        df_l <- dplyr::arrange(df_l, Year, Month, Day, Hour)
         
         df_models <- dplyr::rename(df_l, Temp = temp_corrected)
         
