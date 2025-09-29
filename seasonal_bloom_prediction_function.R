@@ -163,7 +163,7 @@ seasonal_bloom_prediction <- function(month,
         
         df_models <- dplyr::rename(df_l, Temp = temp_corrected)
         
-        forecast_hourly <- interpolate_gaps_hourly(
+        forecast_hourly <- chillR::interpolate_gaps_hourly(
           hourtemps = df_models,
           latitude = target_lat,
           daily_temps = NULL,
